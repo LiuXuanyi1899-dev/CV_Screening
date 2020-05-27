@@ -15,7 +15,12 @@ import  matplotlib.pyplot as plt
 from jqdatasdk import *
 auth('账户','密码')
 ```
-设置初始函数：
+设置初始函数
+
+聚宽的initialize()函数是策略全局函数，仅在回测最初运行一次，run_daily(func, time = 'every_bar')意思是将某个函数每天运行
+
+注意有三个g.参数我放在了外面，因为聚宽的API手册说g.variable放在初始函数里自动成为全局变量，但是我发现只有g.security之类的特定变量才行，  
+而自己定义的话是没法成为全局变量的，这种逻辑其实有点影响我的后续编写
 ```
 g.t = 0
 g.ts = 90
