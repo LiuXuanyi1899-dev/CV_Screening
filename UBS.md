@@ -86,93 +86,88 @@ def alpha_to_list():
 选用逻辑回归的原因一是简单，二是可以很好地防止过拟合，一根简简单单的直线很适合择时  
 ```
 def logistic_regression():
-    if g.t2 % g.ts == 0:
-    
-        logistic_value_list = []
-        buy_list = alpha_to_list()
-        for i in buy_list: #这里用了for loop，要将
-            df = get_bars(i, 20, unit='1w', fields=['high', 'low'], include_now=False, end_dt=None, fq_ref_date=None,
-                          df=True)
-            dflist = df.values.tolist()
-            dfmat = np.mat(dflist)
-            high1 = dfmat[:, 0]
-            low1 = dfmat[:, 1]
-            data0 = np.vstack((high1, low1))
+    logistic_value_list = []
+    buy_list = alpha_to_list()
+    for i in buy_list:
+        df = get_bars(i, 20, unit='1w', fields=['high', 'low'], include_now=False, end_dt=None, fq_ref_date=None,
+                      df=True)
+        dflist = df.values.tolist()
+        dfmat = np.mat(dflist)
+        high1 = dfmat[:, 0]
+        low1 = dfmat[:, 1]
+        data0 = np.vstack((high1, low1))
 
-            # 高低价矩阵
-            # 插入标签
-            def process_panel():
-                i = 0
-                k = [[0]]
-                z = [[1]]
-                panelh = [[0]]
-                panell = [[1]]
-                number = len(high1) - 1
-                while i < number:
-                    i += 1
-                    panelh = np.vstack((panelh, k))
-                    panell = np.vstack((panell, z))
-                return panelh, panell
+        # 高低价矩阵
+        # 插入标签
+        def process_panel():
+            i = 0
+            k = [[0]]
+            z = [[1]]
+            panelh = [[0]]
+            panell = [[1]]
+            number = len(high1) - 1
+            while i < number:
+                i += 1
+                panelh = np.vstack((panelh, k))
+                panell = np.vstack((panell, z))
+            return panelh, panell
 
-            panelh, panell = process_panel()
-            interpanel = np.append(panelh, panell, axis=0)
+        panelh, panell = process_panel()
+        interpanel = np.append(panelh, panell, axis=0)
 
-            # 插入时间序列
-            def process_time():
-                t = 1
-                i = 0
-                timeline = [[1]]
-                number = len(high1) - 1
-                while i < number:
-                    i += 1
-                    t += 1
-                    tmat = [[t]]
-                    timeline = np.append(timeline, tmat, axis=0)
-                return timeline
+        # 插入时间序列
+        def process_time():
+            t = 1
+            i = 0
+            timeline = [[1]]
+            number = len(high1) - 1
+            while i < number:
+                i += 1
+                t += 1
+                tmat = [[t]]
+                timeline = np.append(timeline, tmat, axis=0)
+            return timeline
 
-            timeline = process_time()
-            timelinex = np.vstack((timeline, timeline))
+        timeline = process_time()
+        timelinex = np.vstack((timeline, timeline))
 
-            # 逻辑回归的X矩阵需要前插全是数字1的一列
-            def count_1():
-                number = len(high1) * 2 - 1
-                i = 0
-                k = [[1]]
-                init1 = [[1]]
-                while i < number:
-                    i += 1
-                    init1 = np.vstack((init1, k))
-                return init1 #得到一个长度与导入数据相同的1数字列
+        # 逻辑回归的X矩阵需要前插全是数字1的一列
+        def count_1():
+            number = len(high1) * 2 - 1
+            i = 0
+            k = [[1]]
+            init1 = [[1]]
+            while i < number:
+                i += 1
+                init1 = np.vstack((init1, k))
+            return init1 #得到一个长度与导入数据相同的1数字列
 
-            m1 = count_1()
+        m1 = count_1()
 
-            xmat1 = np.append(m1, timelinex, axis=1)
-            xmat = np.hstack((xmat1, data0))
-            ymat = interpanel
-            #整合为xmat和ymat
+        xmat1 = np.append(m1, timelinex, axis=1)
+        xmat = np.hstack((xmat1, data0))
+        ymat = interpanel
+        #整合为xmat和ymat
 
-            # logistic regression :计算W的值
-            def w_calc(alpha=0.001, maxiter=1000): #alpha是学习率，maxiter为最大迭代次数
-                W = np.mat(np.random.randn(3, 1)) #初始化3个W
-                w_save = []
-                for i in range(maxiter):
-                    # W_update
-                    H = 1 / (1 + np.exp(-xmat * W)) #用sigmod来训练
-                    dw = xmat.T * (H - ymat)
-                    W -= alpha * dw
-                return W  
+        # logistic regression :计算W的值
+        def w_calc(alpha=0.001, maxiter=1000): #alpha是学习率，maxiter为最大迭代次数
+            W = np.mat(np.random.randn(3, 1)) #初始化3个W
+            w_save = []
+            for i in range(maxiter):
+                # W_update
+                H = 1 / (1 + np.exp(-xmat * W)) #用sigmod来训练
+                dw = xmat.T * (H - ymat)
+                W -= alpha * dw
+            return W  
 
-            W = w_calc(0.001, 8000)  #在这里可以调节逻辑回归的参数，数据量少的话迭代一万次够了，后边都是边际递减，没什么效果
-            w0 = W[0, 0]
-            w1 = W[1, 0]
-            w2 = W[2, 0]
-            plotx1 = np.arange(0, 30, 0.01)
-            plotx2 = -w0 / w2 - w1 / w2 * plotx1[-1]  #只算最近一天的那个值
-            logistic_value_list.append(plotx2)
-        return logistic_value_list #返回一个list
-        g.t2 = 1
-    else :
-        g.t2 += 1        
+        W = w_calc(0.001, 8000)  #在这里可以调节逻辑回归的参数，数据量少的话迭代一万次够了，后边都是边际递减，没什么效果
+        w0 = W[0, 0]
+        w1 = W[1, 0]
+        w2 = W[2, 0]
+        plotx1 = np.arange(0, 30, 0.01)
+        plotx2 = -w0 / w2 - w1 / w2 * plotx1[-1]  #只算最近一天的那个值
+        logistic_value_list.append(plotx2)
+    return logistic_value_list #返回一个list   
 ``` 
 
 接下来就到了最关键的一步，也是最让人头疼的一步，设置交易函数
@@ -193,13 +188,11 @@ def trade(context):
         g.s += 1 
         v_dynamic = ((logistic_value_list[g.s])-current_price)/current_price  #这个是现价与回归值的偏移百分比
         
-        if current_price < logistic_value_list[g.s] and context.portfolio.positions[i].avg_cost == 0: 
-            order_value(v_dynamic, totalcash/15)           #如果该股票现价低于回归值没有仓位，建仓1/15资金
-        elif current_price < logistic_value_list[g.s]:     #建仓后股价波动会更新v_dynamic，此时调整仓位
-            holding_rate = context.portfolio.positions_value[i]*10/totalcash
-            order_value(i, (v_dynamic - holding_rate)*totalcash/10)
-        else returning > 0.2 and flag == 0 : #赚了20%就止盈，但是跌不止损
+        if current_price < logistic_value_list[g.s]:
+            order_value(i, v_dynamic) #简单地动态控制仓位
+        elif returning > 0.2 and flag == 0 : #止盈
             order_target_value(i, 0)
+
             
     for stock in context.portfolio.positions : #检查90天更新的股池，有出局的股票就可以清掉
         if stock not in buy_list:
