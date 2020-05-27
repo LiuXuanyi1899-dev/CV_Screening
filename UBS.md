@@ -1,5 +1,5 @@
-"基于逻辑回归择时的指数增强策略"
-我在参加了瑞银的比赛后，开始学习量化策略编写（有python基础），此项目虽然尚不完善（非掉包，完全自己编写），但能一定程度上代表我的投资思路
+"基于逻辑回归择时的指数增强策略"。
+我在参加了瑞银的比赛后，开始学习量化策略编写（有python基础），此项目虽然尚不完善（非掉包，完全自己编写），但能一定程度上代表我的投资思路。
 注：此策略是在聚宽的内置编译器上创作的，没有搭建回测系统，主要原因是我不会安装zipline，非常麻烦，因此如果直接copy到软件上是没法运行的。同时一些代码没有优化（比如应该用向量运算代替for循环等），导致运算时间较长，后续可以考虑优化一下
 策略代码如下：
 _____________________________________________________________________________________________________________________________________
@@ -11,6 +11,18 @@ import pandas as pd
 import  matplotlib.pyplot as plt
 from jqdatasdk import *
 auth('账户','密码')
+```
+设置初始函数：
+```
+g.t = 0
+g.ts = 90
+g.s = -1
+def initialize(context):
+    set_benchmark('000905.XSHG') #基准
+    set_option('use_real_price', True) #用真实价格交易
+    set_order_cost(OrderCost(close_tax=0.001, open_commission=0.0003, close_commission=0.0003, min_commission=5),
+                   type='stock') #交易费用
+    run_daily(trade, time='every_bar') #每日运行trade函数
 ```
 设置PEG因子：
 PEG估值因子，公式：PEG=PE/（G*100）
@@ -39,3 +51,4 @@ def Alpha_PEG():
     return df_PEG
     # 返回df_PEG这一dataframe
 ```
+接下来是
