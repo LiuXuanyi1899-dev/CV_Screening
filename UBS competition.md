@@ -219,17 +219,16 @@ def logistic_regression():
                 W -= alpha * dw
             return W  三行一列的矩阵
 
-        W = w_calc(0.001, 8000)  #输入算法参数，学习率0.001，迭代一万次就差不多了
+        W = w_calc(0.001, 10000)  #输入算法参数，学习率0.001，迭代一万次就差不多了
         w0 = W[0, 0]
         w1 = W[1, 0]
         w2 = W[2, 0]
-        plotx1 = np.arange(0, 30, 0.01)
-        plotx2 = -w0 / w2 - w1 / w2 * plotx1[-1]  #只要最近一天的那个值
-        logistic_value_list.append(plotx2)
+        plotx = -w0 / w2 - w1 / w2 * 20  #只要最近一天的那个值
+        logistic_value_list.append(plotx)
     return logistic_value_list #返回一个list   
 ``` 
 
-由于run_day()函数并不继承前一天运行时计算出来的变量，为了能使用一个trade函数就完成任务，需要把180天运行一次的if语句放在单独设置的更新函数
+由于run_daily()函数并不继承前一天运行时计算出来的变量，为了能使用一个trade函数就完成任务，需要把180天运行一次的if语句放在单独设置的更新函数
 ```
 def update_func() :
     logistic_value_list = []
@@ -246,8 +245,7 @@ def update_func() :
 最后一步，设置交易函数     
 ```
 def trade(context):
-    code_weight = check_list()  #获得购买列表
-    logistic_value_list = logistic_regression()   #获得筛选的10支股票的逻辑回归值
+    code_weight, logistic_value_list= update_func()  #获得购买列表、回归值
 
     for i code_weight.keys() :  #遍历我们的list
         totalcash = context.portfolio.starting_cash  #账户总资金
