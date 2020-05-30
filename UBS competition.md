@@ -31,25 +31,25 @@ auth('账户','密码')
 注意有几个g.参数我放在了外面，因为聚宽的API手册说g.variable放在初始函数里自动成为全局变量，但后来发现只有g.security之类的特定变量才行，  
 自己定义的话是没法成为全局变量的，这种逻辑有点影响我的后续编写
 ```
-g.t1 = 0
-g.t2 = 0
-g.ts = 180
-g.s = -1
+
 def initialize(context):
     set_benchmark('000905.XSHG') #基准
     set_option('use_real_price', True) #用真实价格交易
     set_order_cost(OrderCost(close_tax=0.001, open_commission=0.0003, close_commission=0.0003, min_commission=5),
                    type='stock') #交易费用
     run_daily(trade, time='every_bar') #每日运行trade函数
+    g.days = 0
+    g.refresh_rate = 180
+    g.s = -1  #g.为全局变量
 ```
 
 第二步：设置均值计算函数：
 这个函数用来计算合成因子中的四个均值，即沪深300和中证500所有成分股的总市值、PEG、PE、PB均值
 ```
 def avg_calc():
-    stk1 = get_index_stocks('000300.XSHG')
-    stk2 = get_index_stocks('000905.XSHG')
-    allstocks = stk1 + stk2 #设置的股票池
+    stk1 = get_index_stocks('000300.XSHG') #沪深300
+    stk2 = get_index_stocks('000905.XSHG') #中证500
+    allstocks = stk1 + stk2
     # 获取股票池所有需要的数据
     df_all = get_fundamentals(query(
         valuation.code,
@@ -85,8 +85,9 @@ def avg_calc():
 
 3.打分函数：
 自变量S在后面的交易函数中会调用，我设计的函数为：   
-Point = (S[0] / avg_cap * w1 + S[1] / S[2] / avg_peg * w2 + S[3] / avg_pb * w3 + S[4] / avg_pcf * w4)/50   
+Point = S[0] / avg_cap * w1 + S[1] / S[2] / avg_peg * w2 + S[3] / avg_pb * w3 + S[4] / avg_pcf * w4  
 S是函数的变量，在引用该计算函数时会使用一个dataframe，其包含所有中证500和沪深300的成分股，以及其总市值、PEG、PE、PB四个因子    
+无数研究表明换手率、市值、PE在A股历史中的表现极佳，也是barra多因子框架的重要成分（换手率是动量策略中的因子，所以暂不考虑）
 将四个因子与行业均值的比值乘上一定权重，再加总得到该股票的总分，分数越小越好，并筛选出综合得分前50的股票  
 ```
 def point_calc(S):
@@ -94,8 +95,9 @@ def point_calc(S):
     w1 = 1
     w2 = 1
     w3 = 1
-    w4 = 1
-    return (S[0] / avg_cap * w1 + S[1] / S[2] / avg_peg * w2 + S[3] / avg_pb * w3 + S[4] / avg_pcf * w4) / 50
+    w4 = 1 #权重默认设置为1
+    return S[0] / avg_cap * w1 + S[1] / S[2] / avg_peg * w2 + S[3] / avg_pb * w3 + S[4] / avg_pcf * w4
+    # 此公式即为股票的分数
 ```
 4.获得我们想要的股票：   
 将所有股票代码和其对应分数保存在一个字典里
@@ -127,19 +129,21 @@ def check_list(context):
 
         df['point'] = df[['market_cap', 'pe_ratio', 'inc_net_profit_year_on_year', 'pb_ratio', 'pcf_ratio']] \
             .T.apply(point_calc)  #调用上面那个打分函数
-        df = df.sort_index(by='point').head(10) #以分数切片，获得前10个
-        code_weight = dict(df['code':'point']) #打包成字典
+        df = df.sort_index(by='point').head(10) 取排名前10的股票
+        stocks = list(df['code'])
+        points = list(round(df['point'],3))
+        code_weight = dict(zip(stocks, points)) 打包为字典，包含code和points两个key
         return code_weight  
         g.t = 1
     else:
-        g.t += 1
+        g.t += 1 #时间变量
 
 ```
 
 
 5.设置逻辑回归函数:    
 
-选逻辑回归的原因一是简单，二是可以很好地防止过拟合，算量也比较小，不会出现跑完聚宽的免费时间也回测不完的情况  
+选逻辑回归的优势是欠拟合，算量小（相较于神经网络）
 ```
 def logistic_regression():
     logistic_value_list = []
@@ -153,8 +157,8 @@ def logistic_regression():
         low1 = dfmat[:, 1]
         data0 = np.vstack((high1, low1))
 
-        # 高低价矩阵
-        # 插入标签 0对应最低价，1对应最高价
+        # 含高低价的矩阵
+        # 插入标签：0对应最高价，1对应最低价
         def process_panel():
             i = 0
             k = [[0]]
@@ -187,7 +191,7 @@ def logistic_regression():
         timeline = process_time()
         timelinex = np.vstack((timeline, timeline))
 
-        # 逻辑回归的X矩阵需要前插全是数字1的一列，我也是后来才知道可以用ones直接生成
+        # X矩阵需要前插全是数字1的一列，我也是后来才知道可以用ones直接生成
         def count_1():
             number = len(high1) * 2 - 1
             i = 0
@@ -210,13 +214,13 @@ def logistic_regression():
             W = np.mat(np.random.randn(3, 1)) #初始化3个W
             w_save = []
             for i in range(maxiter):
-                # W_update
-                H = 1 / (1 + np.exp(-xmat * W)) #用sigmod来训练
+                # 选择sigmod来训练W值
+                H = 1 / (1 + np.exp(-xmat * W))
                 dw = xmat.T * (H - ymat)
                 W -= alpha * dw
-            return W  
+            return W  三行一列的矩阵
 
-        W = w_calc(0.001, 8000)  #在这里可以调节逻辑回归的参数，数据量少的话迭代一万次够了，后边都是边际递减，没什么效果
+        W = w_calc(0.001, 8000)  #输入算法参数，学习率0.001，迭代一万次就差不多了
         w0 = W[0, 0]
         w1 = W[1, 0]
         w2 = W[2, 0]
@@ -226,9 +230,23 @@ def logistic_regression():
     return logistic_value_list #返回一个list   
 ``` 
 
-最后一步，也是最让人头疼的一步，设置交易函数     
+为了方便引用，单独设置一个更新函数
+```
+def update_func() :
+    logistic_value_list = []
+    code_weight = {}
+    if g.days % g.refresh_rate == 0: #每180天运行一次
+        logistic_value_list, code_weight = logistic_regression()
+        g.days = 1
+        return logistic_value_list, code_weight
+    else :
+        g.days += 1
+```
+
+
+最后一步，设置交易函数     
 为了能使用一个trade函数就完成任务，需要把180天运行一次的if函数放在里面，但是后来又发现聚宽的run_day()函数并不继承前一天运行时计算出来的变量，   
-为了不让逻辑回归每天都跑一次（一来计算量太大，二来违背了策略的思想），只好让它在被引用时内循环，其实说到底还是对聚宽系统的底层逻辑理解不够。。   
+为了不让算法每天跑一次，只有它在更新函数被引用时内循环
 ```
 def trade(context):
     code_weight = check_list()  #获得购买列表
